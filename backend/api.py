@@ -44,9 +44,6 @@ class Api:
         return {"success": True}
 
     def _run_scan(self, limit: int = 0):
-        from concurrent.futures import ProcessPoolExecutor, as_completed
-        from backend.scanner.worker import analyze_file
-
         try:
             # Step 1: Find files
             def on_files_found(count, msg=None):
@@ -71,44 +68,32 @@ class Api:
                 self._scan_progress["status"] = "Keine neuen Songs"
                 return
 
-            # Step 2: Parallel analysis with worker pool
-            workers = min(6, max(1, (os.cpu_count() or 4) - 2))
+            # Step 2: Sequential analysis (Essentia models are too heavy for multiprocessing)
+            # Reuse the already-loaded analyzer from __init__ to avoid reloading models
             done = 0
             errors = 0
 
-            with ProcessPoolExecutor(max_workers=workers) as pool:
-                futures = {pool.submit(analyze_file, fp): fp for fp in new_files}
-
-                for future in as_completed(futures):
-                    done += 1
-                    fp = futures[future]
-
-                    try:
-                        result = future.result()
-                    except Exception as exc:
-                        errors += 1
-                        self._scan_progress["current"] = done
-                        self._scan_progress["status"] = f"Worker-Fehler bei {os.path.basename(fp)}: {exc}"
-                        log.warning(f"Worker crashed for {fp}: {exc}")
-                        continue
-
-                    if result["error"]:
-                        errors += 1
-                        self._scan_progress["current"] = done
-                        self._scan_progress["status"] = f"Fehler bei {os.path.basename(fp)}: {result['error']}"
-                        log.warning(f"Analysis error for {fp}: {result['error']}")
-                        continue
-
-                    # Store in DB (sequential — SQLite is single-writer)
-                    try:
-                        self._scanner.store_song(self.db, fp, result["tags"], result["features"])
-                    except Exception as exc:
-                        errors += 1
-                        log.warning(f"DB store error for {fp}: {exc}")
-                        continue
-
+            for fp in new_files:
+                done += 1
+                try:
+                    tags = self._tag_reader.read_tags(fp)
+                    features = self._audio_analyzer.analyze(fp)
+                except Exception as exc:
+                    errors += 1
                     self._scan_progress["current"] = done
-                    self._scan_progress["status"] = f"[{done}/{total}] {os.path.basename(fp)} ({workers} Worker)"
+                    self._scan_progress["status"] = f"Fehler bei {os.path.basename(fp)}: {exc}"
+                    log.warning(f"Analysis error for {fp}: {exc}")
+                    continue
+
+                try:
+                    self._scanner.store_song(self.db, fp, tags, features)
+                except Exception as exc:
+                    errors += 1
+                    log.warning(f"DB store error for {fp}: {exc}")
+                    continue
+
+                self._scan_progress["current"] = done
+                self._scan_progress["status"] = f"[{done}/{total}] {os.path.basename(fp)}"
 
             # Step 3: Match Plex rating keys
             self._scan_progress["status"] = "Plex-Matching..."
