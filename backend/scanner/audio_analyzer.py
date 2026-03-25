@@ -63,6 +63,31 @@ GENRE_MAPPING = {
 }
 
 
+def _load_classifier(es, model_file: str):
+    """
+    Load a TensorflowPredict2D model, auto-detecting input/output node names.
+    Tries old-style nodes first, falls back to new-style.
+    """
+    path = _model_path(model_file)
+    # Known node name pairs (old-style vs new-style)
+    node_pairs = [
+        ("model/Placeholder", "model/Softmax"),
+        ("serving_default_model_Placeholder", "PartitionedCall"),
+    ]
+    for input_node, output_node in node_pairs:
+        try:
+            model = es.TensorflowPredict2D(
+                graphFilename=path,
+                input=input_node,
+                output=output_node,
+            )
+            log.debug(f"Loaded {model_file} with nodes: {input_node} -> {output_node}")
+            return model
+        except RuntimeError:
+            continue
+    raise RuntimeError(f"Could not load {model_file}: no valid node names found")
+
+
 class AudioAnalyzer:
     """Audio feature extraction using Essentia with pre-trained ML models."""
 
@@ -82,51 +107,20 @@ class AudioAnalyzer:
             output="PartitionedCall:1",
         )
 
-        # Classification head node names (vary by model version)
-        _head_input = "serving_default_model_Placeholder"
-        _head_output = "PartitionedCall"
-
         # Mood classifiers (binary: [negative, positive])
-        self._mood_happy = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_happy-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
-        self._mood_sad = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_sad-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
-        self._mood_aggressive = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_aggressive-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
-        self._mood_relaxed = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_relaxed-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
-        self._mood_party = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_party-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
-        self._mood_electronic = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_electronic-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
-        self._mood_acoustic = es.TensorflowPredict2D(
-            graphFilename=_model_path("mood_acoustic-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
+        self._mood_happy = _load_classifier(es, "mood_happy-discogs-effnet-1.pb")
+        self._mood_sad = _load_classifier(es, "mood_sad-discogs-effnet-1.pb")
+        self._mood_aggressive = _load_classifier(es, "mood_aggressive-discogs-effnet-1.pb")
+        self._mood_relaxed = _load_classifier(es, "mood_relaxed-discogs-effnet-1.pb")
+        self._mood_party = _load_classifier(es, "mood_party-discogs-effnet-1.pb")
+        self._mood_electronic = _load_classifier(es, "mood_electronic-discogs-effnet-1.pb")
+        self._mood_acoustic = _load_classifier(es, "mood_acoustic-discogs-effnet-1.pb")
 
         # Voice/Instrumental classifier
-        self._voice_instrumental = es.TensorflowPredict2D(
-            graphFilename=_model_path("voice_instrumental-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
+        self._voice_instrumental = _load_classifier(es, "voice_instrumental-discogs-effnet-1.pb")
 
         # Genre classifier (Discogs 400 labels)
-        self._genre_discogs = es.TensorflowPredict2D(
-            graphFilename=_model_path("genre_discogs400-discogs-effnet-1.pb"),
-            input=_head_input, output=_head_output,
-        )
+        self._genre_discogs = _load_classifier(es, "genre_discogs400-discogs-effnet-1.pb")
 
         # Load genre label names
         self._genre_labels = self._load_genre_labels()
