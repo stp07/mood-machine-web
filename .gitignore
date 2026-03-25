@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Models (downloaded at build time)
+models/*.pb
+models/*.json
+
+# Config with secrets
+config.yaml
+
+# Database
+*.db
+
+# IDE
+.vscode/
+.idea/

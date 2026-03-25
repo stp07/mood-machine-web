@@ -1,0 +1,32 @@
+services:
+  mood-machine:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - mood-data:/data/db
+      - /mnt/nas/Musik:/music:ro
+    environment:
+      - MOOD_MACHINE_CONFIG=/app/config.yaml
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    # GPU-Passthrough (auskommentieren falls GPU verfuegbar):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: [gpu]
+
+volumes:
+  mood-data:
+  ollama-models:

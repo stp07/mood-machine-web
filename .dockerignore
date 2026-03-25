@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+frontend/node_modules/
+models/*.pb
+models/*.json
+*.db
+config.yaml
+.git/
+.gitignore

@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.34
+essentia-tensorflow>=2.1b6.dev1164
+mutagen>=1.47
+plexapi>=4.15
+ollama>=0.4
+pyyaml>=6.0
+requests>=2.31

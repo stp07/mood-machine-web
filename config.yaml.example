@@ -1,0 +1,23 @@
+auth:
+  users:
+    - username: admin
+      password_hash: SET_VIA_SCRIPTS_CREATE_USER_PY
+
+analysis:
+  batch_size: 50
+
+database:
+  path: /data/db/library.db
+
+music_source:
+  path: /music
+  type: plex
+
+ollama:
+  model: mistral
+  url: http://ollama:11434
+
+plex:
+  library_name: Musik
+  token: YOUR_PLEX_TOKEN
+  url: http://YOUR_PLEX_IP:32400
