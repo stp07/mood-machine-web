@@ -10,13 +10,14 @@ class OllamaClient:
         ollama_config = config.get("ollama", {})
         self.model = ollama_config.get("model", "mistral")
         self.url = ollama_config.get("url", "http://localhost:11434")
+        self._client = ollama_lib.Client(host=self.url)
 
     def prompt_to_filters(self, user_prompt: str) -> dict:
         """
         Send user's playlist description to Ollama, get back filter JSON.
         Raises on connection error or invalid JSON response.
         """
-        response = ollama_lib.chat(
+        response = self._client.chat(
             model=self.model,
             messages=[
                 {"role": "system", "content": PLAYLIST_SYSTEM_PROMPT},
@@ -114,7 +115,7 @@ class OllamaClient:
     def check_connection(self) -> dict:
         """Check if Ollama is reachable and model is available."""
         try:
-            models = ollama_lib.list()
+            models = self._client.list()
             model_names = [m.get("name", "") for m in models.get("models", [])]
             has_model = any(self.model in name for name in model_names)
             return {
