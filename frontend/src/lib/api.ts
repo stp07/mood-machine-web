@@ -115,7 +115,10 @@ export const api = {
     get<LibraryStats>("/api/library/stats"),
 
   generatePlaylist: (prompt: string) =>
-    post<PlaylistResult>("/api/playlist/generate", { prompt }),
+    post<{ success: boolean; error?: string }>("/api/playlist/generate", { prompt }),
+
+  getGenerateStatus: () =>
+    get<{ running: boolean; status: string; result: PlaylistResult | null }>("/api/playlist/generate/status"),
 
   exportPlex: (name: string, songIds: number[]) =>
     post<{ success: boolean; error?: string }>("/api/export/plex", { name, song_ids: songIds }),

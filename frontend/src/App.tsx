@@ -128,21 +128,43 @@ export default function App() {
     }
   }
 
+  const [generateStatus, setGenerateStatus] = useState("")
+  const generateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return
     setGenerating(true)
-    const result = await api.generatePlaylist(prompt)
-    setGenerating(false)
-    if (result.success && result.songs) {
-      setCurrentSongs(result.songs)
-      setCurrentFilters(result.filters || null)
-      setPlaylistName("")
-      setActivePlaylistId(null)
-      toast.success(`${result.songs.length} Songs gefunden`)
-    } else {
-      toast.error("Playlist-Generierung fehlgeschlagen", { description: result.error })
-      setCurrentSongs([])
+    setGenerateStatus("Starte...")
+    const startResult = await api.generatePlaylist(prompt)
+    if (!startResult.success) {
+      toast.error("Playlist-Generierung fehlgeschlagen", { description: startResult.error })
+      setGenerating(false)
+      setGenerateStatus("")
+      return
     }
+    // Poll for result
+    generateIntervalRef.current = setInterval(async () => {
+      const status = await api.getGenerateStatus()
+      setGenerateStatus(status.status)
+      if (!status.running && status.result) {
+        if (generateIntervalRef.current) {
+          clearInterval(generateIntervalRef.current)
+          generateIntervalRef.current = null
+        }
+        setGenerating(false)
+        setGenerateStatus("")
+        if (status.result.success && status.result.songs) {
+          setCurrentSongs(status.result.songs)
+          setCurrentFilters(status.result.filters || null)
+          setPlaylistName("")
+          setActivePlaylistId(null)
+          toast.success(`${status.result.songs.length} Songs gefunden`)
+        } else {
+          toast.error("Playlist-Generierung fehlgeschlagen", { description: status.result.error })
+          setCurrentSongs([])
+        }
+      }
+    }, 1000)
   }
 
   const handleExportPlex = async () => {
@@ -416,7 +438,7 @@ export default function App() {
                   {generating ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Generiere...
+                      {generateStatus || "Generiere..."}
                     </>
                   ) : (
                     <>

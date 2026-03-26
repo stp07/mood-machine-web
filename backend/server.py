@@ -140,7 +140,11 @@ def library_stats():
 
 @app.post("/api/playlist/generate")
 def playlist_generate(req: GenerateRequest):
-    return api_instance.generate_playlist(req.prompt)
+    return api_instance.start_generate(req.prompt)
+
+@app.get("/api/playlist/generate/status")
+def playlist_generate_status():
+    return api_instance.get_generate_status()
 
 @app.post("/api/playlist/save")
 def playlist_save(req: SavePlaylistRequest):

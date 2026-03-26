@@ -24,6 +24,7 @@ class Api:
         self.config = load_config()
         self.db = init_db(self.config["database"]["path"])
         self._scan_progress = {"running": False, "current": 0, "total": 0, "status": ""}
+        self._generate_status = {"running": False, "status": "", "result": None}
         self._scanner = FileScanner(self.config)
         self._tag_reader = TagReader()
         self._audio_analyzer = AudioAnalyzer(self.config)
@@ -141,25 +142,48 @@ class Api:
         log.debug(f"get_library_stats result: {result}")
         return result
 
-    # ── Playlist Generation ──────────────────────────────────────────
+    # ── Playlist Generation (async via background thread) ───────────
 
-    def generate_playlist(self, prompt: str) -> dict:
-        """Generate a playlist from a natural language prompt via Ollama."""
+    def start_generate(self, prompt: str) -> dict:
+        """Start playlist generation in a background thread."""
+        if self._generate_status.get("running"):
+            return {"success": False, "error": "Generierung läuft bereits"}
+
+        self._generate_status = {
+            "running": True,
+            "status": "Frage Ollama...",
+            "result": None,
+        }
+        thread = threading.Thread(target=self._run_generate, args=(prompt,), daemon=True)
+        thread.start()
+        return {"success": True}
+
+    def _run_generate(self, prompt: str):
         try:
             log.info(f"generate_playlist called with prompt: '{prompt}'")
+            self._generate_status["status"] = "Warte auf Ollama..."
             filters = self._ollama.prompt_to_filters(prompt)
             log.info(f"Ollama filters (validated): {filters}")
+            self._generate_status["status"] = "Suche Songs..."
             songs = self._playlist_gen.query(filters)
             log.info(f"Playlist result: {len(songs)} songs")
-            return {
+            self._generate_status["result"] = {
                 "success": True,
                 "filters": filters,
                 "songs": songs,
                 "count": len(songs),
             }
+            self._generate_status["status"] = f"{len(songs)} Songs gefunden"
         except Exception as e:
             log.error(f"generate_playlist error: {e}", exc_info=True)
-            return {"success": False, "error": str(e)}
+            self._generate_status["result"] = {"success": False, "error": str(e)}
+            self._generate_status["status"] = f"Fehler: {e}"
+        finally:
+            self._generate_status["running"] = False
+
+    def get_generate_status(self) -> dict:
+        """Get current playlist generation status and result."""
+        return self._generate_status
 
     # ── Export ────────────────────────────────────────────────────────
 

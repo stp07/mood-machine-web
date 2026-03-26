@@ -151,11 +151,12 @@ class AudioAnalyzer:
         bpm, beats, beats_confidence, _, _ = self._rhythm(audio)
         bpm = float(bpm)
 
-        # Loudness (EBU R128 approximation via RMS loudness)
+        # Loudness & Energy
         loudness = float(self._loudness(audio))
-        # Normalize to 0-1: typical range -40 to 0 dB
         loudness_db = 20 * np.log10(loudness + 1e-10)
-        energy_norm = max(0.0, min(1.0, (loudness_db + 35) / 30))
+        # Essentia Loudness on normalized audio: typical range -25 to -3 dB
+        # Map to 0-1 using wider range to get meaningful differentiation
+        energy_norm = max(0.0, min(1.0, (loudness_db + 25) / 22))
 
         # Danceability (Essentia algorithm)
         danceability_score, _ = self._danceability(audio)
