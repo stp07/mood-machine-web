@@ -49,6 +49,10 @@ class OllamaClient:
                 {"role": "system", "content": PLAYLIST_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
+            options={
+                "num_predict": 150,   # JSON output is short, limit tokens
+                "num_ctx": 512,       # Small context window for speed
+            },
         )
 
         content = response["message"]["content"]
