@@ -9,18 +9,51 @@ from backend.llm.prompts import PLAYLIST_SYSTEM_PROMPT
 log = logging.getLogger("mood-machine")
 
 
-def _fix_unquoted_keys(text: str) -> str:
-    """Fix JavaScript-style unquoted keys like {min:0.8} → {"min":0.8}."""
-    # Match unquoted keys: word characters after { or , not already quoted
-    return re.sub(r'(?<=[{,])\s*(\w+)\s*:', r' "\1":', text)
+def _repair_json(text: str) -> str:
+    """Repair common LLM JSON issues: unquoted keys, unmatched brackets."""
+    # Fix unquoted keys: {min:0.8} → {"min":0.8}
+    text = re.sub(r'(?<=[{,])\s*(\w+)\s*:', r' "\1":', text)
+
+    # Remove unmatched ] by walking the string with string-awareness
+    in_string = False
+    escape = False
+    bracket_depth = 0
+    result = []
+    for ch in text:
+        if escape:
+            result.append(ch)
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            result.append(ch)
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            result.append(ch)
+            continue
+        if in_string:
+            result.append(ch)
+            continue
+        if ch == '[':
+            bracket_depth += 1
+            result.append(ch)
+        elif ch == ']':
+            if bracket_depth > 0:
+                bracket_depth -= 1
+                result.append(ch)
+            # else: skip unmatched ]
+        else:
+            result.append(ch)
+    return ''.join(result)
 
 
 def _try_parse(text: str) -> dict:
-    """Try json.loads, falling back to fixing unquoted keys."""
+    """Try json.loads, falling back to repairing broken JSON."""
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        fixed = _fix_unquoted_keys(text)
+        fixed = _repair_json(text)
         return json.loads(fixed)
 
 
@@ -39,8 +72,8 @@ def _extract_json(text: str) -> dict:
     if match:
         return _try_parse(match.group(1))
 
-    # Try to find outermost { ... } block (allowing nested braces)
-    match = re.search(r"\{[^}]*\}", text, re.DOTALL)
+    # Try to find first { ... } block (greedy to catch nested objects)
+    match = re.search(r"\{.+\}", text, re.DOTALL)
     if match:
         return _try_parse(match.group(0))
 
