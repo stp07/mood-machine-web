@@ -50,19 +50,21 @@ def build_query(filters: dict) -> tuple[str, list]:
     score_parts = []  # For relevance-based ordering
 
     # Mood filters: soft threshold + relevance scoring
+    mood_threshold = filters.get("_mood_threshold", 0.15)
     if "mood" in filters:
         for mood_name in filters["mood"]:
             col = MOOD_COLUMNS.get(mood_name)
             if col:
-                conditions.append(f"{col} >= 0.2")  # Soft minimum
+                conditions.append(f"{col} >= {mood_threshold}")
                 score_parts.append(col)
 
     # Genre filters: soft threshold + relevance scoring
+    genre_threshold = filters.get("_genre_threshold", 0.15)
     if "genre" in filters:
         for genre_name in filters["genre"]:
             col = GENRE_COLUMNS.get(genre_name)
             if col:
-                conditions.append(f"{col} >= 0.2")  # Soft minimum
+                conditions.append(f"{col} >= {genre_threshold}")
                 score_parts.append(col)
 
     # Range filters (energy, tempo, danceability, etc.) — hard filter
@@ -205,8 +207,33 @@ def _relax_filters(db: sqlite3.Connection, filters: dict, desired: int) -> list[
             log.info(f"Relaxation OK after dropping '{field}': {len(results)} songs")
             return results
 
-    # Phase 3: Drop genre_tag, then genre, then mood (least to most important)
-    for field in ["genre_tag", "genre", "mood"]:
+    # Phase 3: Drop genre_tag first
+    if "genre_tag" in relaxed:
+        relaxed.pop("genre_tag")
+        log.debug("Dropped 'genre_tag' filter")
+        results = _try_query(db, relaxed)
+        if len(results) >= desired:
+            log.info(f"Relaxation OK after dropping 'genre_tag': {len(results)} songs")
+            return results
+
+    # Phase 4: Lower mood/genre thresholds before dropping them
+    for threshold in [0.1, 0.05, 0.01]:
+        changed = False
+        if "mood" in relaxed:
+            relaxed["_mood_threshold"] = threshold
+            changed = True
+        if "genre" in relaxed:
+            relaxed["_genre_threshold"] = threshold
+            changed = True
+        if changed:
+            log.debug(f"Lowered mood/genre threshold to {threshold}")
+            results = _try_query(db, relaxed)
+            if len(results) >= desired:
+                log.info(f"Relaxation OK with threshold {threshold}: {len(results)} songs")
+                return results
+
+    # Phase 5: Drop genre, then mood (last resort before random)
+    for field in ["genre", "mood"]:
         if field not in relaxed:
             continue
         relaxed.pop(field)
