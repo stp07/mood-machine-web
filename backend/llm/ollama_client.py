@@ -9,24 +9,40 @@ from backend.llm.prompts import PLAYLIST_SYSTEM_PROMPT
 log = logging.getLogger("mood-machine")
 
 
-def _extract_json(text: str) -> dict:
-    """Extract JSON object from LLM response text, even if wrapped in markdown or prose."""
-    # Try direct parse first
-    text = text.strip()
+def _fix_unquoted_keys(text: str) -> str:
+    """Fix JavaScript-style unquoted keys like {min:0.8} → {"min":0.8}."""
+    # Match unquoted keys: word characters after { or , not already quoted
+    return re.sub(r'(?<=[{,])\s*(\w+)\s*:', r' "\1":', text)
+
+
+def _try_parse(text: str) -> dict:
+    """Try json.loads, falling back to fixing unquoted keys."""
     try:
         return json.loads(text)
     except json.JSONDecodeError:
+        fixed = _fix_unquoted_keys(text)
+        return json.loads(fixed)
+
+
+def _extract_json(text: str) -> dict:
+    """Extract JSON object from LLM response text, even if wrapped in markdown or prose."""
+    text = text.strip()
+
+    # Try direct parse
+    try:
+        return _try_parse(text)
+    except (json.JSONDecodeError, ValueError):
         pass
 
     # Try to find JSON in code blocks
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
-        return json.loads(match.group(1))
+        return _try_parse(match.group(1))
 
-    # Try to find first { ... } block
-    match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+    # Try to find outermost { ... } block (allowing nested braces)
+    match = re.search(r"\{[^}]*\}", text, re.DOTALL)
     if match:
-        return json.loads(match.group(0))
+        return _try_parse(match.group(0))
 
     raise ValueError(f"No valid JSON found in response: {text[:200]}")
 
