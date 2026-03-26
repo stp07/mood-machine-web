@@ -1,8 +1,34 @@
 """Ollama REST client for natural language → filter JSON translation."""
 import json
+import re
+import logging
 import ollama as ollama_lib
 
 from backend.llm.prompts import PLAYLIST_SYSTEM_PROMPT
+
+log = logging.getLogger("mood-machine")
+
+
+def _extract_json(text: str) -> dict:
+    """Extract JSON object from LLM response text, even if wrapped in markdown or prose."""
+    # Try direct parse first
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find JSON in code blocks
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+
+    # Try to find first { ... } block
+    match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(0))
+
+    raise ValueError(f"No valid JSON found in response: {text[:200]}")
 
 
 class OllamaClient:
@@ -23,11 +49,11 @@ class OllamaClient:
                 {"role": "system", "content": PLAYLIST_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            format="json",
         )
 
         content = response["message"]["content"]
-        filters = json.loads(content)
+        log.debug(f"Ollama raw response: {content[:500]}")
+        filters = _extract_json(content)
         return self._validate_filters(filters)
 
     def _validate_filters(self, filters: dict) -> dict:
