@@ -154,9 +154,10 @@ class AudioAnalyzer:
         # Loudness & Energy
         loudness = float(self._loudness(audio))
         loudness_db = 20 * np.log10(loudness + 1e-10)
-        # Essentia Loudness on normalized audio: typical range -25 to -3 dB
-        # Map to 0-1 using wider range to get meaningful differentiation
-        energy_norm = max(0.0, min(1.0, (loudness_db + 25) / 22))
+        # Essentia Loudness() returns total energy (sum of squares), not mean.
+        # Observed range: ~-4 to ~75 dB, average ~63 dB for 6595 songs.
+        # Map 45..75 → 0..1 so average (~63) lands around 0.6
+        energy_norm = max(0.0, min(1.0, (loudness_db - 45) / 30))
 
         # Danceability (Essentia algorithm)
         danceability_score, _ = self._danceability(audio)

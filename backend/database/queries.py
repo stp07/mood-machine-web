@@ -50,7 +50,7 @@ def build_query(filters: dict) -> tuple[str, list]:
     score_parts = []  # For relevance-based ordering
 
     # Mood filters: soft threshold + relevance scoring
-    mood_threshold = filters.get("_mood_threshold", 0.15)
+    mood_threshold = filters.get("_mood_threshold", 0.3)
     if "mood" in filters:
         for mood_name in filters["mood"]:
             col = MOOD_COLUMNS.get(mood_name)
@@ -59,7 +59,7 @@ def build_query(filters: dict) -> tuple[str, list]:
                 score_parts.append(col)
 
     # Genre filters: soft threshold + relevance scoring
-    genre_threshold = filters.get("_genre_threshold", 0.15)
+    genre_threshold = filters.get("_genre_threshold", 0.3)
     if "genre" in filters:
         for genre_name in filters["genre"]:
             col = GENRE_COLUMNS.get(genre_name)
