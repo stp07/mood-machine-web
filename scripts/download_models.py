@@ -71,12 +71,12 @@ def main():
 
     print()
     if failed:
-        print(f"Failed to download {len(failed)} model(s):")
+        print(f"WARNING: Failed to download {len(failed)} model(s):")
         for f in failed:
             print(f"  - {os.path.basename(f)}")
-        sys.exit(1)
+        print("Scanner will not work until all models are available.")
     else:
-        print(f"All {len(MODELS)} models downloaded successfully.")
+        print(f"All {len(MODELS)} models ready.")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml
       - mood-data:/data/db
+      - essentia-models:/app/models
       - /mnt/musik:/music:ro
     environment:
       - MOOD_MACHINE_CONFIG=/app/config.yaml
@@ -30,3 +31,4 @@ services:
 volumes:
   mood-data:
   ollama-models:
+  essentia-models:

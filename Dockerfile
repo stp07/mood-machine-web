@@ -20,9 +20,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download Essentia ML models
+# Scripts (model download runs at startup via entrypoint)
 COPY scripts/ ./scripts/
-RUN python scripts/download_models.py
 
 # Backend code
 COPY backend/ ./backend/
@@ -34,4 +33,4 @@ ENV MOOD_MACHINE_CONFIG=/app/config.yaml
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "python scripts/download_models.py; uvicorn backend.server:app --host 0.0.0.0 --port 8000"]
