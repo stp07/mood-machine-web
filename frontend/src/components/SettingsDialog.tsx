@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Settings } from "lucide-react"
 import { api } from "@/lib/api"
 import type { AppSettings } from "@/lib/api"
 
@@ -107,8 +108,10 @@ export function SettingsDialog({ apiReady }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        Einstellungen
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" title="Einstellungen">
+          <Settings className="h-4 w-4" />
+        </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>

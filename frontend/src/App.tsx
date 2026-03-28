@@ -27,6 +27,7 @@ import {
   Loader2,
   Disc3,
   Library,
+  Menu,
 } from "lucide-react"
 
 function formatDuration(seconds: number | null): string {
@@ -52,6 +53,9 @@ export default function App() {
   const [dark, setDark] = useState(true)
   const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null)
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Mobile sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -280,16 +284,19 @@ export default function App() {
       />
 
       {/* Header */}
-      <header className="border-b px-6 py-3 flex items-center justify-between bg-card">
+      <header className="border-b px-4 md:px-6 py-3 flex items-center justify-between bg-card">
         <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            <Menu className="h-5 w-5" />
+          </Button>
           <Disc3 className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold tracking-wider uppercase" style={{ fontFamily: "var(--font-retro)" }}>Mood Machine</h1>
-          <Badge variant={apiReady ? "default" : "secondary"} className="text-xs">
+          <h1 className="text-lg md:text-xl font-bold tracking-wider uppercase" style={{ fontFamily: "var(--font-retro)" }}>Mood Machine</h1>
+          <Badge variant={apiReady ? "default" : "secondary"} className="text-xs hidden sm:inline-flex">
             {apiReady ? "Verbunden" : "Verbinde..."}
           </Badge>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{username}</span>
+        <div className="flex items-center gap-1 md:gap-2">
+          <span className="text-xs text-muted-foreground hidden sm:inline">{username}</span>
           <SettingsDialog apiReady={apiReady} />
           <Button variant="ghost" size="icon" onClick={() => setDark(!dark)} title={dark ? "Heller Modus" : "Dunkler Modus"}>
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -300,9 +307,26 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 relative">
+        {/* Mobile overlay */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+        )}
+
         {/* Sidebar */}
-        <aside className="w-64 border-r p-4 space-y-4 bg-card/50">
+        <aside className={`
+          fixed z-40 top-0 left-0 h-full w-72 border-r p-4 space-y-4 bg-card transition-transform duration-200
+          md:static md:z-auto md:w-64 md:translate-x-0 md:bg-card/50
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        `}>
+          {/* Mobile close button */}
+          <div className="flex items-center justify-between md:hidden mb-2">
+            <span className="text-sm font-semibold">Menu</span>
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
           {/* Library Stats */}
           <Card>
             <CardHeader className="pb-2">
@@ -396,7 +420,7 @@ export default function App() {
                           ? "bg-primary/10 border border-primary/30"
                           : "hover:bg-muted"
                       }`}
-                      onClick={() => handleLoadPlaylist(pl)}
+                      onClick={() => { handleLoadPlaylist(pl); setSidebarOpen(false) }}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium truncate">{pl.name}</div>
@@ -422,19 +446,19 @@ export default function App() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 space-y-4">
+        <main className="flex-1 p-3 md:p-6 space-y-4 min-w-0">
           {/* Prompt Input */}
           <Card>
             <CardContent className="pt-6">
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
-                  placeholder="Beschreibe deine Playlist... z.B. 'Chillige Musik zum Arbeiten, keine Vocals'"
+                  placeholder="Beschreibe deine Playlist..."
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !generating && handleGenerate()}
                   className="flex-1"
                 />
-                <Button onClick={handleGenerate} disabled={!apiReady || generating || !prompt.trim()}>
+                <Button onClick={handleGenerate} disabled={!apiReady || generating || !prompt.trim()} className="shrink-0">
                   {generating ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -465,13 +489,19 @@ export default function App() {
                       placeholder="Playlist-Name"
                       value={playlistName}
                       onChange={(e) => setPlaylistName(e.target.value)}
-                      className="w-48"
+                      className="w-32 md:w-48"
                     />
-                    <Button variant="outline" size="sm" onClick={handleSavePlaylist} disabled={!playlistName.trim()} title="Lokal speichern">
+                    <Button variant="outline" size="icon" className="md:hidden shrink-0" onClick={handleSavePlaylist} disabled={!playlistName.trim()} title="Speichern">
+                      <Save className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="md:hidden shrink-0" onClick={handleExportPlex} disabled={!playlistName.trim()} title="Plex">
+                      <Upload className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={handleSavePlaylist} disabled={!playlistName.trim()} title="Lokal speichern">
                       <Save className="h-4 w-4 mr-1" />
                       Speichern
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleExportPlex} disabled={!playlistName.trim()} title="An Plex senden">
+                    <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={handleExportPlex} disabled={!playlistName.trim()} title="An Plex senden">
                       <Upload className="h-4 w-4 mr-1" />
                       Plex
                     </Button>
@@ -489,14 +519,14 @@ export default function App() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b text-left text-muted-foreground">
-                            <th className="py-2 w-6"></th>
+                            <th className="py-2 w-6 hidden sm:table-cell"></th>
                             <th className="py-2 pr-4 w-8">#</th>
                             <th className="py-2 pr-4">Titel</th>
                             <th className="py-2 pr-4">Kuenstler</th>
-                            <th className="py-2 pr-4">Album</th>
-                            <th className="py-2 pr-4 text-right">Dauer</th>
-                            <th className="py-2 pr-4 text-right">BPM</th>
-                            <th className="py-2 text-right">Energy</th>
+                            <th className="py-2 pr-4 hidden lg:table-cell">Album</th>
+                            <th className="py-2 pr-4 text-right hidden sm:table-cell">Dauer</th>
+                            <th className="py-2 pr-4 text-right hidden md:table-cell">BPM</th>
+                            <th className="py-2 text-right hidden md:table-cell">Energy</th>
                             <th className="py-2 w-8"></th>
                           </tr>
                         </thead>
@@ -513,16 +543,16 @@ export default function App() {
                               onDrop={() => handleDrop(i)}
                               onDragEnd={handleDragEnd}
                             >
-                              <td className="py-1.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground">
+                              <td className="py-1.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground hidden sm:table-cell">
                                 <GripVertical className="h-4 w-4" />
                               </td>
                               <td className="py-1.5 pr-4 text-muted-foreground text-xs">{i + 1}</td>
-                              <td className="py-1.5 pr-4 font-medium truncate max-w-48">{song.title || "Unbekannt"}</td>
-                              <td className="py-1.5 pr-4 text-muted-foreground truncate max-w-36">{song.artist || "-"}</td>
-                              <td className="py-1.5 pr-4 text-muted-foreground truncate max-w-36">{song.album || "-"}</td>
-                              <td className="py-1.5 pr-4 text-right font-mono text-xs">{formatDuration(song.duration_seconds)}</td>
-                              <td className="py-1.5 pr-4 text-right font-mono text-xs">{song.tempo_bpm?.toFixed(0) || "-"}</td>
-                              <td className="py-1.5 text-right font-mono text-xs">{song.energy != null ? (song.energy * 100).toFixed(0) + "%" : "-"}</td>
+                              <td className="py-1.5 pr-4 font-medium truncate max-w-32 md:max-w-48">{song.title || "Unbekannt"}</td>
+                              <td className="py-1.5 pr-4 text-muted-foreground truncate max-w-24 md:max-w-36">{song.artist || "-"}</td>
+                              <td className="py-1.5 pr-4 text-muted-foreground truncate max-w-36 hidden lg:table-cell">{song.album || "-"}</td>
+                              <td className="py-1.5 pr-4 text-right font-mono text-xs hidden sm:table-cell">{formatDuration(song.duration_seconds)}</td>
+                              <td className="py-1.5 pr-4 text-right font-mono text-xs hidden md:table-cell">{song.tempo_bpm?.toFixed(0) || "-"}</td>
+                              <td className="py-1.5 text-right font-mono text-xs hidden md:table-cell">{song.energy != null ? (song.energy * 100).toFixed(0) + "%" : "-"}</td>
                               <td className="py-1.5">
                                 <Button
                                   variant="ghost"
