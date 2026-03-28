@@ -108,10 +108,10 @@ export function SettingsDialog({ apiReady }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Einstellungen">
-          <Settings className="h-4 w-4" />
-        </Button>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon" title="Einstellungen" />}
+      >
+        <Settings className="h-4 w-4" />
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
