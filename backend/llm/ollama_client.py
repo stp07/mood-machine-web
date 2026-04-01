@@ -129,25 +129,35 @@ class OllamaClient:
             if not valid["genre"]:
                 del valid["genre"]
 
-        # Range fields — only keep the most important ones to avoid over-filtering
-        range_fields = ["energy", "tempo_bpm", "valence"]
-        secondary_fields = ["danceability", "instrumentalness", "acousticness"]
+        # Deterministic mood → energy mapping (LLM not trusted for energy)
+        MOOD_ENERGY = {
+            "aggressive": {"min": 0.6, "max": 1.0},
+            "party":      {"min": 0.6, "max": 1.0},
+            "happy":      {"min": 0.4, "max": 0.8},
+            "electronic": {"min": 0.3, "max": 0.9},
+            "relaxed":    {"min": 0.0, "max": 0.4},
+            "sad":        {"min": 0.0, "max": 0.4},
+            "acoustic":   {"min": 0.0, "max": 0.5},
+        }
+        moods = valid.get("mood", [])
+        if moods:
+            # Merge energy ranges from all active moods
+            e_min = min(MOOD_ENERGY.get(m, {"min": 0})["min"] for m in moods)
+            e_max = max(MOOD_ENERGY.get(m, {"max": 1})["max"] for m in moods)
+            valid["energy"] = {"min": e_min, "max": e_max}
+            log.debug(f"Energy set from mood {moods}: {valid['energy']}")
+        else:
+            # No mood → use full range
+            valid["energy"] = {"min": 0.0, "max": 1.0}
 
-        for field in range_fields + secondary_fields:
+        # Range fields — keep non-energy ranges from LLM
+        for field in ["tempo_bpm", "valence"]:
             if field in filters and isinstance(filters[field], dict):
                 valid[field] = {}
                 if "min" in filters[field]:
                     valid[field]["min"] = float(filters[field]["min"])
                 if "max" in filters[field]:
                     valid[field]["max"] = float(filters[field]["max"])
-
-        # Drop secondary fields if we already have 3+ filters (mood/genre/range)
-        active_count = sum(1 for k in valid if k in ("mood", "genre") or k in range_fields)
-        if active_count >= 3:
-            for sf in secondary_fields:
-                if sf in valid:
-                    log.debug(f"Dropping secondary filter '{sf}' to avoid over-filtering")
-                    del valid[sf]
 
         # Year — rule-based extraction from user prompt (LLM not trusted for this)
         decade_match = re.search(r'\b([2-9])0s\b', user_prompt, re.IGNORECASE) or \
@@ -184,18 +194,14 @@ class OllamaClient:
         sort = filters.get("sort_by", "random")
         valid["sort_by"] = sort if sort in allowed_sorts else "random"
 
-        # Fix contradictory sort: high-energy mood + energy_asc makes no sense
+        # Auto-set sort based on mood if LLM didn't provide a sensible one
         high_energy_moods = {"aggressive", "party"}
-        has_high_energy_mood = any(m in high_energy_moods for m in valid.get("mood", []))
-        if has_high_energy_mood and valid["sort_by"] == "energy_asc":
-            log.debug("Fixing contradictory sort: aggressive/party mood + energy_asc → energy_desc")
-            valid["sort_by"] = "energy_desc"
-
-        low_energy_moods = {"relaxed", "sad"}
-        has_low_energy_mood = any(m in low_energy_moods for m in valid.get("mood", []))
-        if has_low_energy_mood and valid["sort_by"] == "energy_desc":
-            log.debug("Fixing contradictory sort: relaxed/sad mood + energy_desc → energy_asc")
-            valid["sort_by"] = "energy_asc"
+        low_energy_moods = {"relaxed", "sad", "acoustic"}
+        if valid["sort_by"] == "random":
+            if any(m in high_energy_moods for m in moods):
+                valid["sort_by"] = "energy_desc"
+            elif any(m in low_energy_moods for m in moods):
+                valid["sort_by"] = "energy_asc"
 
         return valid
 
