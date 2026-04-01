@@ -100,8 +100,9 @@ class OllamaClient:
             ],
             options={
                 "num_predict": 150,   # JSON output is short, limit tokens
-                "num_ctx": 512,       # Small context window for speed
+                "num_ctx": 1024,      # Enough for prompt+response without cache bleed
             },
+            keep_alive=0,             # Unload model after each request to clear KV cache
         )
 
         content = response["message"]["content"]
