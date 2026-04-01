@@ -107,9 +107,9 @@ class OllamaClient:
         content = response["message"]["content"]
         log.debug(f"Ollama raw response: {content[:500]}")
         filters = _extract_json(content)
-        return self._validate_filters(filters)
+        return self._validate_filters(filters, user_prompt)
 
-    def _validate_filters(self, filters: dict) -> dict:
+    def _validate_filters(self, filters: dict, user_prompt: str = "") -> dict:
         """Sanitize and validate the LLM-generated filters."""
         import logging
         log = logging.getLogger("mood-machine")
@@ -150,13 +150,16 @@ class OllamaClient:
                     log.debug(f"Dropping secondary filter '{sf}' to avoid over-filtering")
                     del valid[sf]
 
-        # Year
-        if "year" in filters and isinstance(filters["year"], dict):
+        # Year — only include if user actually mentioned a year/decade
+        _has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d|[2-9]0s|[2-9]0er)\b', user_prompt, re.IGNORECASE))
+        if "year" in filters and isinstance(filters["year"], dict) and _has_year:
             valid["year"] = {}
             if "min" in filters["year"]:
                 valid["year"]["min"] = int(filters["year"]["min"])
             if "max" in filters["year"]:
                 valid["year"]["max"] = int(filters["year"]["max"])
+        elif "year" in filters and not _has_year:
+            log.debug("Dropping year filter — user prompt contains no year/decade reference")
 
         # Genre tag (free-text from metadata, e.g. "Grunge", "Trip-Hop")
         if "genre_tag" in filters and isinstance(filters["genre_tag"], str):
