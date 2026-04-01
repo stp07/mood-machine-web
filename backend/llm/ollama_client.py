@@ -92,20 +92,18 @@ class OllamaClient:
         Send user's playlist description to Ollama, get back filter JSON.
         Raises on connection error or invalid JSON response.
         """
-        response = self._client.chat(
+        prompt = f"{PLAYLIST_SYSTEM_PROMPT}\nUser: {user_prompt}\nJSON:"
+        response = self._client.generate(
             model=self.model,
-            messages=[
-                {"role": "system", "content": PLAYLIST_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
+            prompt=prompt,
             options={
-                "num_predict": 150,   # JSON output is short, limit tokens
-                "num_ctx": 1024,      # Enough for prompt+response without cache bleed
+                "num_predict": 150,
+                "num_ctx": 1024,
             },
-            keep_alive=0,             # Unload model after each request to clear KV cache
+            keep_alive=0,
         )
 
-        content = response["message"]["content"]
+        content = response["response"]
         log.debug(f"Ollama raw response: {content[:500]}")
         filters = _extract_json(content)
         return self._validate_filters(filters, user_prompt)
