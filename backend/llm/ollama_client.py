@@ -150,16 +150,22 @@ class OllamaClient:
                     log.debug(f"Dropping secondary filter '{sf}' to avoid over-filtering")
                     del valid[sf]
 
-        # Year — only include if user actually mentioned a year/decade
-        _has_year = bool(re.search(r'\b(1[89]\d{2}|20[0-2]\d|[2-9]0s|[2-9]0er)\b', user_prompt, re.IGNORECASE))
-        if "year" in filters and isinstance(filters["year"], dict) and _has_year:
-            valid["year"] = {}
-            if "min" in filters["year"]:
-                valid["year"]["min"] = int(filters["year"]["min"])
-            if "max" in filters["year"]:
-                valid["year"]["max"] = int(filters["year"]["max"])
-        elif "year" in filters and not _has_year:
-            log.debug("Dropping year filter — user prompt contains no year/decade reference")
+        # Year — rule-based extraction from user prompt (LLM not trusted for this)
+        decade_match = re.search(r'\b([2-9])0s\b', user_prompt, re.IGNORECASE) or \
+                       re.search(r'\b([2-9])0er\b', user_prompt, re.IGNORECASE)
+        year_range_match = re.search(r'\b(1[89]\d{2}|20[0-2]\d)\s*[-–bis]+\s*(1[89]\d{2}|20[0-2]\d)\b', user_prompt)
+        single_year_match = re.search(r'\b(1[89]\d{2}|20[0-2]\d)\b', user_prompt)
+        if decade_match:
+            d = int(decade_match.group(1))
+            valid["year"] = {"min": 1900 + d * 10, "max": 1900 + d * 10 + 9}
+            log.debug(f"Year filter from decade: {valid['year']}")
+        elif year_range_match:
+            valid["year"] = {"min": int(year_range_match.group(1)), "max": int(year_range_match.group(2))}
+            log.debug(f"Year filter from range: {valid['year']}")
+        elif single_year_match:
+            y = int(single_year_match.group(1))
+            valid["year"] = {"min": y, "max": y}
+            log.debug(f"Year filter from single year: {valid['year']}")
 
         # Genre tag (free-text from metadata, e.g. "Grunge", "Trip-Hop")
         if "genre_tag" in filters and isinstance(filters["genre_tag"], str):
