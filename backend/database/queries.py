@@ -49,8 +49,8 @@ def build_query(filters: dict) -> tuple[str, list]:
     params = []
     score_parts = []  # For relevance-based ordering
 
-    # Mood filters: soft threshold + relevance scoring
-    mood_threshold = filters.get("_mood_threshold", 0.3)
+    # Mood filters: low threshold + relevance scoring (best matches first)
+    mood_threshold = filters.get("_mood_threshold", 0.1)
     if "mood" in filters:
         for mood_name in filters["mood"]:
             col = MOOD_COLUMNS.get(mood_name)
@@ -58,14 +58,15 @@ def build_query(filters: dict) -> tuple[str, list]:
                 conditions.append(f"{col} >= {mood_threshold}")
                 score_parts.append(col)
 
-    # Genre filters: soft threshold + relevance scoring
-    genre_threshold = filters.get("_genre_threshold", 0.3)
+    # Genre filters: low threshold + relevance scoring (best matches first)
+    genre_threshold = filters.get("_genre_threshold", 0.1)
     if "genre" in filters:
         for genre_name in filters["genre"]:
             col = GENRE_COLUMNS.get(genre_name)
             if col:
                 conditions.append(f"{col} >= {genre_threshold}")
-                score_parts.append(col)
+                # Weight genre higher (x2) so it dominates the sort
+                score_parts.append(f"({col} * 2)")
 
     # Range filters (energy, tempo, danceability, etc.) — hard filter
     for field_name, col_name in RANGE_FIELDS.items():
@@ -102,22 +103,22 @@ def build_query(filters: dict) -> tuple[str, list]:
         conditions.append(f"artist IN ({placeholders})")
         params.extend(filters["artist"])
 
-    # Build ORDER BY: relevance score first, then user-requested sort
-    # Relevance = sum of mood/genre scores (higher = better match)
+    # Build ORDER BY: always relevance first when mood/genre set, then user sort
+    user_sort = filters.get("sort_by", "random")
+    sort_map = {
+        "random": "RANDOM()",
+        "energy_asc": "energy ASC",
+        "energy_desc": "energy DESC",
+        "tempo_asc": "tempo_bpm ASC",
+        "tempo_desc": "tempo_bpm DESC",
+    }
+    secondary_sort = sort_map.get(user_sort, "RANDOM()")
+
     if score_parts:
         relevance_expr = " + ".join(score_parts)
-        # Mix relevance with randomness for variety within similar scores
-        order_by = f"({relevance_expr}) DESC, RANDOM()"
+        order_by = f"({relevance_expr}) DESC, {secondary_sort}"
     else:
-        user_sort = filters.get("sort_by", "random")
-        sort_map = {
-            "random": "RANDOM()",
-            "energy_asc": "energy ASC",
-            "energy_desc": "energy DESC",
-            "tempo_asc": "tempo_bpm ASC",
-            "tempo_desc": "tempo_bpm DESC",
-        }
-        order_by = sort_map.get(user_sort, "RANDOM()")
+        order_by = secondary_sort
 
     where = " AND ".join(conditions) if conditions else "1=1"
     limit = filters.get("limit", 25)
@@ -216,8 +217,8 @@ def _relax_filters(db: sqlite3.Connection, filters: dict, desired: int) -> list[
             log.info(f"Relaxation OK after dropping 'genre_tag': {len(results)} songs")
             return results
 
-    # Phase 4: Lower mood/genre thresholds before dropping them
-    for threshold in [0.1, 0.05, 0.01]:
+    # Phase 4: Lower mood/genre thresholds (but never drop them — relevance sort handles ranking)
+    for threshold in [0.05, 0.01, 0.0]:
         changed = False
         if "mood" in relaxed:
             relaxed["_mood_threshold"] = threshold
@@ -231,17 +232,6 @@ def _relax_filters(db: sqlite3.Connection, filters: dict, desired: int) -> list[
             if len(results) >= desired:
                 log.info(f"Relaxation OK with threshold {threshold}: {len(results)} songs")
                 return results
-
-    # Phase 5: Drop genre, then mood (last resort before random)
-    for field in ["genre", "mood"]:
-        if field not in relaxed:
-            continue
-        relaxed.pop(field)
-        log.debug(f"Dropped '{field}' filter")
-        results = _try_query(db, relaxed)
-        if len(results) >= desired:
-            log.info(f"Relaxation OK after dropping '{field}': {len(results)} songs")
-            return results
 
     # Absolute last resort
     log.warning("All filters exhausted, returning random songs")
